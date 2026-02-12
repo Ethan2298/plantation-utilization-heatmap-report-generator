@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, time, date
 from collections import defaultdict, Counter
 from io import BytesIO
 
-st.set_page_config(page_title="Plantation Schedule Optimizer", layout="wide")
+st.set_page_config(page_title="Appointments & Idle Time Heatmap Generator", layout="wide")
 
 # ── Helpers ──
 
@@ -223,6 +223,21 @@ def parse_appointments(file, date_start, date_end):
 
 # ── Calculation engine ──
 
+def calculate_appointment_heatmap(appointments, date_start, date_end, slots):
+    """Calculate cumulative massage appointment counts per day-of-week × time slot."""
+    heatmap = np.zeros((7, len(slots)), dtype=int)
+    for (dt, therapist), appts in appointments.items():
+        if dt < date_start or dt > date_end:
+            continue
+        dow = dt.weekday()
+        for si, slot_time in enumerate(slots):
+            for a_start, a_end in appts:
+                if slot_overlaps(slot_time, a_start, a_end):
+                    heatmap[dow][si] += 1
+                    break  # count once per therapist per slot
+    return heatmap
+
+
 def calculate_idle_heatmap(shifts, blockouts, appointments, date_start, date_end, slots):
     """Calculate idle therapist-slots heatmap by day of week."""
     heatmap = np.zeros((7, len(slots)), dtype=int)
@@ -312,7 +327,7 @@ def build_idle_heatmap_fig(heatmap, slots, title_suffix="", subtitle_extra=""):
             v = heatmap[i][j]
             if v > 0:
                 ax.text(j, i, str(v), ha="center", va="center", fontsize=9,
-                        fontweight="bold", color="white" if v > 12 else "black")
+                        fontweight="bold", color="black")
 
     for i in range(7):
         ax.text(len(slots) + 0.3, i, str(int(row_totals[i])),
@@ -323,6 +338,40 @@ def build_idle_heatmap_fig(heatmap, slots, title_suffix="", subtitle_extra=""):
     ax.set_title(f"{total:,} idle therapist-slots  |  {subtitle_extra}", fontsize=10, color="gray", pad=12)
 
     plt.colorbar(im, ax=ax, shrink=0.8, pad=0.08).set_label("Idle Therapist-Slots", fontsize=10)
+    plt.tight_layout(rect=[0, 0, 0.93, 0.92])
+    return fig
+
+
+def build_appointment_heatmap_fig(heatmap, slots):
+    labels = [slot_label(s) for s in slots]
+    row_totals = heatmap.sum(axis=1)
+    total = heatmap.sum()
+
+    fig, ax = plt.subplots(figsize=(22, 5.5))
+    cmap = mcolors.LinearSegmentedColormap.from_list("appt_orange", ["#fff8f0", "#e65100"])
+    im = ax.imshow(heatmap, cmap=cmap, aspect="auto", vmin=0, vmax=max(20, heatmap.max()))
+
+    ax.set_yticks(range(7))
+    ax.set_yticklabels(DAY_ORDER, fontsize=12, fontweight="bold")
+    ax.set_xticks(range(len(slots)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
+
+    for i in range(7):
+        for j in range(len(slots)):
+            v = heatmap[i][j]
+            if v > 0:
+                ax.text(j, i, str(v), ha="center", va="center", fontsize=9,
+                        fontweight="bold", color="black")
+
+    for i in range(7):
+        ax.text(len(slots) + 0.3, i, str(int(row_totals[i])),
+                ha="left", va="center", fontsize=13, fontweight="bold")
+    ax.text(len(slots) + 0.3, -0.8, "Total", ha="left", va="center", fontsize=11, fontweight="bold")
+
+    fig.suptitle("Massage Appointments Heatmap", fontsize=16, fontweight="bold", y=0.98)
+    ax.set_title(f"{total:,} total massage appointment-slots", fontsize=10, color="gray", pad=12)
+
+    plt.colorbar(im, ax=ax, shrink=0.8, pad=0.08).set_label("Appointment Count", fontsize=10)
     plt.tight_layout(rect=[0, 0, 0.93, 0.92])
     return fig
 
@@ -375,38 +424,6 @@ def build_optimization_fig(supply_avail, demand, utilization, idle_avg, slots):
     return fig
 
 
-def build_recommendations(supply_avail, demand, utilization, idle_avg, slots):
-    """Build add/cut recommendations as DataFrames."""
-    labels = [slot_label(s) for s in slots]
-
-    cut_rows = []
-    add_rows = []
-    for dow in range(7):
-        for si in range(len(slots)):
-            avail = supply_avail[dow][si]
-            dem = demand[dow][si]
-            util = utilization[dow][si]
-            idle_v = idle_avg[dow][si]
-            if avail < 0.5:
-                continue
-            row = {
-                "Day": DAY_ORDER[dow],
-                "Time": labels[si],
-                "Avg Available": round(avail, 1),
-                "Avg Booked": round(dem, 1),
-                "Avg Idle": round(idle_v, 1),
-                "Utilization": f"{util:.0f}%"
-            }
-            if util >= 85 and dem >= 1:
-                add_rows.append({**row, "Priority": "High" if util >= 95 else "Medium"})
-            if idle_v >= 1.2 and util < 75:
-                cut_rows.append(row)
-
-    add_df = pd.DataFrame(add_rows).sort_values("Utilization", ascending=False) if add_rows else pd.DataFrame()
-    cut_df = pd.DataFrame(cut_rows).sort_values("Avg Idle", ascending=False) if cut_rows else pd.DataFrame()
-    return add_df, cut_df
-
-
 def fig_to_pdf_bytes(fig):
     buf = BytesIO()
     fig.savefig(buf, format="pdf", dpi=150, bbox_inches="tight")
@@ -418,18 +435,48 @@ def fig_to_pdf_bytes(fig):
 # UI
 # ══════════════════════════════════════════════════════════════════
 
-st.title("Plantation Schedule Optimizer")
-st.markdown("Upload your 3 Zenoti exports and get instant heatmaps + staffing recommendations.")
+st.markdown("""
+<style>
+    /* ── Header ── */
+    .app-header {
+        padding: 1.5rem 0 0.75rem 0;
+    }
+    .app-header h1 {
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: inherit;
+        margin: 0 0 0.25rem 0;
+        letter-spacing: -0.5px;
+    }
+    .app-header p {
+        font-size: 1.15rem;
+        color: inherit;
+        opacity: 0.7;
+        margin: 0;
+        line-height: 1.5;
+    }
+    .accent-line {
+        display: none;
+    }
 
-st.divider()
+</style>
+""", unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    att_file = st.file_uploader("Attendance (.xlsx)", type=["xlsx"])
-with col2:
-    bo_file = st.file_uploader("Block Out Time Details (.xls)", type=["xls"])
-with col3:
-    appt_file = st.file_uploader("Appointments (.xlsx)", type=["xlsx"])
+# ── Header ──
+st.markdown("""
+<div class="app-header">
+    <h1>Appointments &amp; Idle Time Heatmap Generator</h1>
+    <p>Upload 3 reports from Zenoti, select your date range, and hit Generate to see idle-time heatmaps, supply vs. demand charts, and staffing recommendations.</p>
+</div>
+<div class="accent-line"></div>
+""", unsafe_allow_html=True)
+
+# ── File uploads ──
+st.subheader("Upload your Zenoti exports")
+
+att_file = st.file_uploader("1. Attendance (.xlsx)", type=["xlsx"], key="att")
+bo_file = st.file_uploader("2. Employee Block Out Time Details Report (.xls)", type=["xls"], key="bo")
+appt_file = st.file_uploader("3. Appointments (.xlsx)", type=["xlsx"], key="appt")
 
 if att_file and bo_file and appt_file:
     # Detect date range from attendance
@@ -469,75 +516,30 @@ if att_file and bo_file and appt_file:
 
         slots = build_slots(time(9, 0), time(21, 0))
 
-        # ── Tab 1: Idle Heatmap (with exclusions) ──
-        # ── Tab 2: Idle Heatmap (all block-outs) ──
-        # ── Tab 3: Supply vs Demand ──
-        # ── Tab 4: Recommendations ──
-
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "Idle Heatmap (Adjusted)",
-            "Idle Heatmap (Original)",
-            "Supply vs. Demand",
-            "Recommendations"
+        tab1, tab2 = st.tabs([
+            "Appointments Heatmap",
+            "Idle Time Heatmap"
         ])
 
         with tab1:
-            with st.spinner("Calculating adjusted idle heatmap..."):
-                hm_adj = calculate_idle_heatmap(shifts, blockouts_filtered, appointments, date_start, date_end, slots)
-            excl_label = " & ".join(t.replace(" 2026", "") for t in exclude_types) if exclude_types else "None"
-            fig1 = build_idle_heatmap_fig(
-                hm_adj, slots,
-                title_suffix=f" - Minus {excl_label} Blocks",
-                subtitle_extra=f"Excluding: {excl_label}"
-            )
+            with st.spinner("Calculating appointments heatmap..."):
+                hm_appt = calculate_appointment_heatmap(appointments, date_start, date_end, slots)
+            fig1 = build_appointment_heatmap_fig(hm_appt, slots)
             st.pyplot(fig1)
             st.download_button("Download PDF", fig_to_pdf_bytes(fig1),
-                               file_name="Idle_Heatmap_Adjusted.pdf", mime="application/pdf")
+                               file_name="Appointments_Heatmap.pdf", mime="application/pdf")
 
         with tab2:
-            with st.spinner("Calculating original idle heatmap..."):
-                hm_orig = calculate_idle_heatmap(shifts, blockouts_all, appointments, date_start, date_end, slots)
+            with st.spinner("Calculating idle time heatmap..."):
+                hm_idle = calculate_idle_heatmap(shifts, blockouts_all, appointments, date_start, date_end, slots)
             fig2 = build_idle_heatmap_fig(
-                hm_orig, slots,
+                hm_idle, slots,
                 title_suffix="",
-                subtitle_extra="All block-outs included"
+                subtitle_extra="Shift - Block Outs - Appointments = Idle"
             )
             st.pyplot(fig2)
             st.download_button("Download PDF", fig_to_pdf_bytes(fig2),
-                               file_name="Idle_Heatmap_Original.pdf", mime="application/pdf")
-
-        with tab3:
-            with st.spinner("Calculating supply vs. demand..."):
-                sr, sa, dem, util, idle_a, dc = calculate_supply_demand(
-                    shifts, blockouts_all, appointments, date_start, date_end, slots
-                )
-            fig3 = build_optimization_fig(sa, dem, util, idle_a, slots)
-            st.pyplot(fig3)
-            st.download_button("Download PDF", fig_to_pdf_bytes(fig3),
-                               file_name="Supply_vs_Demand.pdf", mime="application/pdf")
-
-        with tab4:
-            with st.spinner("Building recommendations..."):
-                sr, sa, dem, util, idle_a, dc = calculate_supply_demand(
-                    shifts, blockouts_all, appointments, date_start, date_end, slots
-                )
-                add_df, cut_df = build_recommendations(sa, dem, util, idle_a, slots)
-
-            st.subheader("Where to ADD Hours (85%+ utilization)")
-            st.caption("These slots are near or at capacity. Consider adding therapist hours.")
-            if not add_df.empty:
-                st.dataframe(add_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No slots at 85%+ utilization.")
-
-            st.divider()
-
-            st.subheader("Where to CUT Hours (1.2+ avg idle therapists, <75% utilization)")
-            st.caption("These slots consistently have idle therapists. Consider reducing hours.")
-            if not cut_df.empty:
-                st.dataframe(cut_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No significantly overstaffed slots found.")
+                               file_name="Idle_Time_Heatmap.pdf", mime="application/pdf")
 
 else:
     st.info("Upload all 3 files above to get started.")
