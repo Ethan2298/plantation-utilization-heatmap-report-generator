@@ -531,7 +531,7 @@ if att_file and bo_file and appt_file:
 
         with tab2:
             with st.spinner("Calculating idle time heatmap..."):
-                hm_idle = calculate_idle_heatmap(shifts, blockouts_all, appointments, date_start, date_end, slots)
+                hm_idle = calculate_idle_heatmap(shifts, blockouts_filtered, appointments, date_start, date_end, slots)
             fig2 = build_idle_heatmap_fig(
                 hm_idle, slots,
                 title_suffix="",
