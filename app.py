@@ -249,14 +249,17 @@ def tag_members(appt_df, lookup):
 # ============================================================
 # PAYLOAD BUILDER
 # ============================================================
-def build_data_payload(att_df, appt_df, bot_df):
+def build_data_payload(att_df, appt_df, bot_df, has_membership=False):
     """Assemble the JSON data payload for the HTML report."""
     attendance_records = att_df[
         ['dateStr', 'dayOfWeek', 'startMinute', 'endMinute', 'scheduledHours']
     ].rename(columns={'dateStr': 'date'}).to_dict('records')
 
+    appt_cols = ['dateStr', 'dayOfWeek', 'startMinute', 'endMinute', 'durationMin']
+    if has_membership:
+        appt_cols.append('isMember')
     appointment_records = appt_df[
-        ['dateStr', 'dayOfWeek', 'startMinute', 'endMinute', 'durationMin', 'isMember']
+        appt_cols
     ].rename(columns={'dateStr': 'date'}).to_dict('records')
 
     blockout_records = bot_df[
@@ -292,6 +295,7 @@ def build_data_payload(att_df, appt_df, bot_df):
         'dataStartDate': all_dates[0],
         'dataEndDate':   all_dates[-1],
         'blockTypes':    sorted(bot_df['BlockOutTimeType'].dropna().unique().tolist()),
+        'hasMembership': has_membership,
         'hourStart': HOUR_START,
         'hourEnd':   HOUR_END,
         'periods':   periods,
@@ -704,7 +708,7 @@ function renderHeatmap() {
       const util = net > 0 ? (cc.appointment / net) * 100 : null;
       const avgT = dDates > 0 ? cc.therapistCount / dDates : null;
 
-      const memberShare = cc.appointment > 0 ? cc.memberAppt / cc.appointment * 100 : null;
+      const memberShare = DATA.META.hasMembership && cc.appointment > 0 ? cc.memberAppt / cc.appointment * 100 : null;
       const val = util !== null ? util.toFixed(0) + '%' : '\u2013';
       const subParts = [];
       if (util !== null && memberShare !== null) subParts.push(Math.round(memberShare) + '%M');
@@ -738,7 +742,7 @@ function renderHeatmap() {
     const dDates = dowDateCounts[dow];
     const avgU = colCnt[dow] > 0 ? (colSum[dow] / colCnt[dow]).toFixed(0) + '%' : '\u2013';
     const avgT = dDates > 0 ? (colRawTher[dow] / dDates / numHours).toFixed(1) + ' MT' : '';
-    const mPct = colAppt[dow] > 0 ? Math.round(colMemberAppt[dow] / colAppt[dow] * 100) : null;
+    const mPct = DATA.META.hasMembership && colAppt[dow] > 0 ? Math.round(colMemberAppt[dow] / colAppt[dow] * 100) : null;
     const nmPct = mPct !== null ? 100 - mPct : null;
     const split = mPct !== null
       ? '<div class="hm-cell-sub" style="font-size:10px;white-space:nowrap">' + mPct + '%M \u00b7 ' + nmPct + '%NM</div>'
@@ -966,7 +970,7 @@ if st.button("Generate Report", type="primary", disabled=not required_ready):
             appt_df = tag_members(appt_df, lookup)
 
         with st.spinner("Building payload..."):
-            payload = build_data_payload(att_df, appt_df, bot_df)
+            payload = build_data_payload(att_df, appt_df, bot_df, has_membership=(mem_file is not None))
 
         with st.spinner("Generating HTML report..."):
             html_report = generate_html_report(payload)
@@ -974,13 +978,16 @@ if st.button("Generate Report", type="primary", disabled=not required_ready):
         st.session_state['html_report'] = html_report
         st.session_state['data_payload'] = payload
 
-        n_mem = int(appt_df['isMember'].sum())
         n_total = len(appt_df)
+        if mem_file is not None:
+            n_mem = int(appt_df['isMember'].sum())
+            appt_detail = f"{n_total} appointments ({n_mem} member / {n_total - n_mem} non-member)"
+        else:
+            appt_detail = f"{n_total} appointments"
         st.success(
             f"Report generated! "
             f"{len(att_df)} attendance records, "
-            f"{n_total} appointments "
-            f"({n_mem} member / {n_total - n_mem} non-member), "
+            f"{appt_detail}, "
             f"{len(bot_df)} block-out entries."
         )
 
