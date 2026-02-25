@@ -237,7 +237,7 @@ def main():
     appt = appt.dropna(subset=['start_dt', 'end_dt'])
     appt['startMinute'] = appt['start_dt'].dt.hour * 60 + appt['start_dt'].dt.minute
     appt['endMinute'] = appt['end_dt'].dt.hour * 60 + appt['end_dt'].dt.minute
-    appt = appt[appt['startMinute'] != appt['endMinute']].copy()
+    appt = appt[appt['endMinute'] > appt['startMinute']].copy()
     appt['durationMin'] = appt['endMinute'] - appt['startMinute']
     appt['dayOfWeek'] = appt['start_dt'].dt.dayofweek
     appt['dateStr'] = appt['start_dt'].dt.strftime('%Y-%m-%d')
@@ -253,8 +253,8 @@ def main():
     bot = bot.dropna(subset=['startMinute', 'endMinute'])
     bot['startMinute'] = bot['startMinute'].astype(int)
     bot['endMinute'] = bot['endMinute'].astype(int)
-    # AM/PM wrap fix
-    mask = bot['endMinute'] <= bot['startMinute']
+    # AM/PM wrap fix (strict < to avoid inflating zero-duration blockouts)
+    mask = bot['endMinute'] < bot['startMinute']
     bot.loc[mask, 'endMinute'] = bot.loc[mask, 'endMinute'] + 720
     bot['dayOfWeek'] = bot['date'].dt.dayofweek
     bot['dateStr'] = bot['date'].dt.strftime('%Y-%m-%d')

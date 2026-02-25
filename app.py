@@ -3,6 +3,7 @@
 Streamlit app — upload Zenoti exports, generate a 4-week utilization HTML report.
 """
 
+import html as html_lib
 import io
 import json
 import traceback
@@ -142,8 +143,8 @@ def load_appointments(file):
     appt = appt.dropna(subset=['start_dt', 'end_dt'])
     appt['startMinute'] = appt['start_dt'].dt.hour * 60 + appt['start_dt'].dt.minute
     appt['endMinute']   = appt['end_dt'].dt.hour   * 60 + appt['end_dt'].dt.minute
-    # Filter zero-duration (enhancement add-ons)
-    appt = appt[appt['startMinute'] != appt['endMinute']].copy()
+    # Filter zero-duration (enhancement add-ons) and negative-duration (midnight-spanning)
+    appt = appt[appt['endMinute'] > appt['startMinute']].copy()
     if appt.empty:
         raise DataLoadError("No valid appointments found after filtering zero-duration entries.")
     appt['durationMin'] = appt['endMinute'] - appt['startMinute']
@@ -182,8 +183,8 @@ def load_blockouts(file):
     bot['startMinute'] = bot['startMinute'].astype(int)
     bot['endMinute']   = bot['endMinute'].astype(int)
 
-    # AM/PM wrap fix
-    mask = bot['endMinute'] <= bot['startMinute']
+    # AM/PM wrap fix (strict < to avoid inflating zero-duration blockouts)
+    mask = bot['endMinute'] < bot['startMinute']
     bot.loc[mask, 'endMinute'] = bot.loc[mask, 'endMinute'] + 720
 
     bot['dayOfWeek']  = bot['date'].dt.dayofweek
@@ -473,6 +474,8 @@ function minsInHour(startMin, endMin, hourStart) {
   return Math.max(0, Math.min(endMin, hourStart + 60) - Math.max(startMin, hourStart));
 }
 
+function escAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
 function fmtDelta(curr, prev, suffix, isPP) {
   if (prev === null || prev === undefined) return '<span class="delta-neutral">N/A</span>';
   const d = curr - prev;
@@ -723,7 +726,7 @@ function renderHeatmap() {
           : '') +
         (avgT !== null ? '\nTherapists: ' + avgT.toFixed(1) + ' on shift' : '');
 
-      html += '<td style="background:' + bg + ';color:' + fg + '" data-tip="' + tip + '">' +
+      html += '<td style="background:' + bg + ';color:' + fg + '" data-tip="' + escAttr(tip) + '">' +
         '<div>' + val + '</div>' + (sub ? '<div class="hm-cell-sub">' + sub + '</div>' : '') + '</td>';
     }
     html += '</tr>';
@@ -885,7 +888,7 @@ def generate_html_report(payload):
         f"Plantation \u2014 4-Week Utilization "
         f"({s0.strftime('%b')} {s0.day} \u2013 {sN.strftime('%b')} {sN.day})"
     )
-    html = HTML_TEMPLATE.replace('__REPORT_TITLE__', report_title)
+    html = HTML_TEMPLATE.replace('__REPORT_TITLE__', html_lib.escape(report_title))
     # Escape forward slashes in closing tags to prevent </script> injection
     json_str = json.dumps(payload, default=str).replace('</', '<\\/')
     html = html.replace('__DATA_PAYLOAD__', json_str)
@@ -971,7 +974,7 @@ if st.button("Generate Report", type="primary", disabled=not required_ready):
         st.session_state['html_report'] = html_report
         st.session_state['data_payload'] = payload
 
-        n_mem = appt_df['isMember'].sum()
+        n_mem = int(appt_df['isMember'].sum())
         n_total = len(appt_df)
         st.success(
             f"Report generated! "
