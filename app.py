@@ -502,11 +502,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
     </div>
   </div>
 
+  <div class="section-header" style="margin-top:24px"><h2 id="scorecardTitle">Overview</h2></div>
   <div class="stats" id="scorecard"></div>
 
   <div class="section">
     <div class="section-header">
-      <h2 id="heatmapTitle">Hourly Utilization</h2>
+      <h2 id="heatmapTitle">Utilization Heatmap</h2>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <div class="heatmap-controls" id="heatmapTabs"></div>
         <div class="view-toggle" id="viewToggle"></div>
@@ -555,6 +556,7 @@ let CUT = 85;
 
 let allMetrics = [];  // one entry per period, index 0 = oldest
 let avg2Metrics = null; // 2-week aggregate (last 2 periods)
+let avg2EarlierMetrics = null; // 2-week aggregate (first 2 periods)
 let avgMetrics = null; // 4-week aggregate
 
 // ============================================================
@@ -683,6 +685,7 @@ function recalculate() {
   const n2 = PERIODS.length;
   const avg2Start = PERIODS[n2 >= 2 ? n2 - 2 : 0].start;
   avg2Metrics = computeMetrics(avg2Start, PERIODS[n2 - 1].end);
+  avg2EarlierMetrics = n2 >= 4 ? computeMetrics(PERIODS[0].start, PERIODS[1].end) : null;
   avgMetrics = computeMetrics(PERIODS[0].start, PERIODS[n2 - 1].end);
   renderScorecard();
   buildHeatmapTabs();
@@ -723,21 +726,23 @@ function buildFilters() {
 // SCORECARD
 // ============================================================
 function renderScorecard() {
-  let c, p, wLabel;
+  let c, p, wLabel, compLabel;
   if (state.heatmapIdx === 'avg') {
     c = avgMetrics;
-    p = null;
+    p = avg2Metrics;
     wLabel = '4-Wk Avg';
+    compLabel = 'vs 2-Wk Avg (' + PERIODS[PERIODS.length >= 2 ? PERIODS.length - 2 : 0].label + '\u2013' + PERIODS[PERIODS.length - 1].label + ')';
   } else if (state.heatmapIdx === 'avg2') {
     c = avg2Metrics;
-    p = null;
+    p = avg2EarlierMetrics;
     wLabel = '2-Wk Avg';
+    compLabel = p ? 'vs earlier 2-Wk (' + PERIODS[0].label + '\u2013' + PERIODS[1].label + ')' : '';
   } else {
     c = allMetrics[state.heatmapIdx];
     p = state.heatmapIdx > 0 ? allMetrics[state.heatmapIdx - 1] : null;
     wLabel = PERIODS[state.heatmapIdx].label;
+    compLabel = p ? 'vs ' + PERIODS[state.heatmapIdx - 1].label : '';
   }
-  const compLabel = p ? 'vs ' + PERIODS[state.heatmapIdx - 1].label : '';
   const noDelta = '<span class="delta-neutral">\u2014</span>';
   const cards = [
     { label: 'Utilization ('   + wLabel + ')', value: c.utilization.toFixed(1) + '%',             delta: p ? fmtDelta(c.utilization,       p.utilization,       '',  true)  : noDelta },
@@ -746,12 +751,11 @@ function renderScorecard() {
     { label: 'Net Available',                   value: c.netAvailable.toFixed(1) + 'h',            delta: p ? fmtDelta(c.netAvailable,      p.netAvailable,      'h', false) : noDelta },
     { label: 'Appointment Hours',               value: c.totalApptHrs.toFixed(1) + 'h',            delta: p ? fmtDelta(c.totalApptHrs,      p.totalApptHrs,      'h', false) : noDelta },
   ];
+  document.getElementById('scorecardTitle').textContent = 'Overview \u2014 ' + wLabel + (compLabel ? ' (' + compLabel + ')' : '');
   document.getElementById('scorecard').innerHTML = cards.map(c =>
     '<div class="stat-card"><div class="value">' + c.value + '</div>' +
     '<div class="label">' + c.label + '</div><div class="delta">' + c.delta + '</div></div>'
-  ).join('') +
-  (compLabel ? '<div class="delta-label">' + compLabel + '</div>' : '') +
-  '<div class="delta-label" style="color:#aaa;font-size:11px;margin-top:4px">Scorecard reflects full shift hours; heatmap clips to ' + hourLabel(HOUR_START) + '\u2013' + hourLabel(HOUR_END) + ' window</div>';
+  ).join('');
 }
 
 // ============================================================
@@ -1068,12 +1072,12 @@ function buildViewToggle() {
   ['utilization', 'staffing'].forEach(mode => {
     const btn = document.createElement('button');
     btn.className = 'view-btn' + (state.viewMode === mode ? ' active' : '');
-    btn.textContent = mode === 'utilization' ? 'Utilization' : 'Staffing';
+    btn.textContent = mode === 'utilization' ? 'Utilization' : 'Staffing Recommendations';
     btn.addEventListener('click', () => {
       state.viewMode = mode;
       wrap.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('heatmapTitle').textContent = mode === 'staffing' ? 'Staffing Recommendations' : 'Hourly Utilization';
+      // title stays as "Utilization Heatmap" regardless of view mode
       renderHeatmap();
       renderStaffingExtras();
     });
