@@ -575,7 +575,7 @@ function fmtDelta(curr, prev, suffix, isPP) {
     return '<span class="' + cls + '">' + arrow + Math.abs(d).toFixed(1) + '</span>';
   }
   const sign = d > 0 ? '+' : '';
-  const pct  = prev !== 0 ? (d / Math.abs(prev)) * 100 : 0;
+  const pct  = prev !== 0 ? Math.min(999, Math.max(-999, (d / Math.abs(prev)) * 100)) : 0;
   const cls  = d > 0 ? 'delta-positive' : d < 0 ? 'delta-negative' : 'delta-neutral';
   return '<span class="' + cls + '">' + sign + d.toFixed(1) + (suffix||'') + ' (' + sign + pct.toFixed(1) + '%)</span>';
 }
@@ -750,7 +750,8 @@ function renderScorecard() {
     '<div class="stat-card"><div class="value">' + c.value + '</div>' +
     '<div class="label">' + c.label + '</div><div class="delta">' + c.delta + '</div></div>'
   ).join('') +
-  (compLabel ? '<div class="delta-label">' + compLabel + '</div>' : '');
+  (compLabel ? '<div class="delta-label">' + compLabel + '</div>' : '') +
+  '<div class="delta-label" style="color:#aaa;font-size:11px;margin-top:4px">Scorecard reflects full shift hours; heatmap clips to ' + hourLabel(HOUR_START) + '\u2013' + hourLabel(HOUR_END) + ' window</div>';
 }
 
 // ============================================================
@@ -1141,7 +1142,9 @@ def compute_validation_summary(payload):
         tag = ' (current)' if p.get('isCurrent') else ''
         p_att  = [r for r in payload['ATTENDANCE']   if p['start'] <= r['date'] <= p['end']]
         p_appt = [r for r in payload['APPOINTMENTS'] if p['start'] <= r['date'] <= p['end']]
-        p_blk  = [r for r in payload['BLOCKOUTS']    if p['start'] <= r['date'] <= p['end']]
+        off_by_default = ['shift adjustment', 'leaving early']
+        p_blk  = [r for r in payload['BLOCKOUTS']    if p['start'] <= r['date'] <= p['end']
+                   and not any(s in r.get('blockType', '').lower() for s in off_by_default)]
         sched  = sum(r['scheduledHours'] for r in p_att)
         appt_h = sum(r['durationMin'] / 60 for r in p_appt)
         blk_h  = sum(r['blockHours'] for r in p_blk)
@@ -1241,6 +1244,7 @@ if 'data_payload' in st.session_state:
     st.subheader("Validation Summary")
     summary_df = compute_validation_summary(st.session_state['data_payload'])
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    st.caption("Block hours exclude types containing \"shift adjustment\" or \"leaving early\" (matching report defaults).")
 
 if 'html_report' in st.session_state:
     html_bytes = st.session_state['html_report'].encode('utf-8')
