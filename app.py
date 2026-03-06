@@ -403,10 +403,64 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .comparison-metric .m-label{color:#666}
 .comparison-metric .m-value{font-weight:500;font-variant-numeric:tabular-nums}
 
+/* Staffing View - Cell Colors */
+.cell-add{background:#dcfce7;color:#15803d}
+.cell-add .cell-sub{color:rgba(21,128,61,0.55)}
+.cell-cut{background:#fee2e2;color:#b91c1c}
+.cell-cut .cell-sub{color:rgba(185,28,28,0.55)}
+.cell-ok{color:#555}
+.cell-empty{background:#f3f4f6;color:#ccc;font-size:11px}
+
+/* Staffing heatmap table overrides */
+.hm-staffing{border-collapse:separate;border-spacing:3px;width:100%;background:#fafafa;padding:6px;font-size:12px}
+.hm-staffing th{text-align:center;font-weight:600;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.4px;padding:4px}
+.hm-staffing td{border-radius:4px;min-width:100px;padding:6px 4px 5px;text-align:center;vertical-align:middle;cursor:default;transition:opacity .12s}
+.hm-staffing td:hover{opacity:0.82}
+.hm-staffing .hour-label{text-align:right!important;padding-right:10px!important;font-weight:600;color:#555;min-width:48px;font-size:11px;background:transparent!important}
+.hm-staffing .row-total{font-weight:600;background:transparent!important;min-width:55px}
+.hm-staffing .avg-row td{font-weight:600;border-top:2px solid #ccc}
+.util-val{font-size:13px;font-weight:600}
+.cell-sub{font-size:10px;color:rgba(0,0,0,0.45);margin-top:1px}
+
+/* Staffing Badges */
+.badge{font-size:9px;font-weight:700;letter-spacing:0.5px;margin-top:3px;padding:1px 5px;border-radius:10px;display:inline-block}
+.badge-add{background:#86efac;color:#14532d}
+.badge-cut{background:#fca5a5;color:#7f1d1d}
+
+/* Staffing Legend */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;align-items:center}
+.legend-item{display:flex;align-items:center;gap:6px}
+.legend-dot{width:12px;height:12px;border-radius:3px}
+.ld-add{background:#dcfce7;border:1px solid #86efac}
+.ld-ok{background:#f3f4f6;border:1px solid #d1d5db}
+.ld-cut{background:#fee2e2;border:1px solid #fca5a5}
+.ld-na{background:#f3f4f6;border:1px solid #d1d5db}
+
+/* Threshold Controls */
+.thresh-input{width:58px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-weight:600;text-align:center;font-family:inherit;outline:none}
+.thresh-input:focus{border-color:#1e3a8a;box-shadow:0 0 0 2px rgba(30,58,138,.12)}
+.thresh-input.add{color:#15803d;border-color:#86efac}
+.thresh-input.cut{color:#b91c1c;border-color:#fca5a5}
+.thresh-pct{font-size:13px;color:#888;font-weight:500}
+.ctrl-group{display:flex;align-items:center;gap:8px}
+.ctrl-group label{font-size:12px;font-weight:500;color:#555;white-space:nowrap}
+.ctrl-divider{width:1px;height:26px;background:#e5e5e5}
+.threshold-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+/* View Toggle */
+.view-toggle{display:inline-flex;gap:0;margin-left:auto}
+.view-btn{padding:5px 14px;border:1px solid #e5e5e5;background:#fff;font-size:12px;cursor:pointer;color:#666;font-family:inherit;transition:all .15s}
+.view-btn:first-child{border-radius:4px 0 0 4px}
+.view-btn:last-child{border-radius:0 4px 4px 0}
+.view-btn:not(:first-child){border-left:none}
+.view-btn.active{background:#1e3a8a;color:#fff;border-color:#1e3a8a}
+.view-btn:hover:not(.active){background:#f0f4ff}
+
 @media(max-width:900px){
   .stats{grid-template-columns:repeat(2,1fr)}
   .comparison-cards{grid-template-columns:1fr}
   .filter-bar-body{flex-direction:column}
+  .action-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -421,13 +475,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 
   <div class="filter-bar">
     <div class="filter-bar-header">
-      <h3>Filters</h3>
+      <h3>Settings</h3>
       <button class="filter-bar-toggle" id="filterToggle">collapse</button>
     </div>
     <div class="filter-bar-body" id="filterBody">
       <div class="filter-group">
-        <div class="filter-group-label">Block Time Types</div>
+        <div class="filter-group-label">Block Time Type Filters</div>
         <div class="filter-options" id="blockTypeFilters"></div>
+      </div>
+      <div class="filter-group" id="thresholdGroup">
+        <div class="filter-group-label">Thresholds</div>
+        <div class="threshold-controls">
+          <div class="ctrl-group">
+            <label>&#9650; Add above</label>
+            <input type="number" id="addInput" min="51" max="100" step="1" value="90" class="thresh-input add">
+            <span class="thresh-pct">%</span>
+          </div>
+          <div class="ctrl-divider"></div>
+          <div class="ctrl-group">
+            <label>&#9660; Cut below</label>
+            <input type="number" id="cutInput" min="0" max="99" step="1" value="85" class="thresh-input cut">
+            <span class="thresh-pct">%</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -436,8 +506,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 
   <div class="section">
     <div class="section-header">
-      <h2>Hourly Utilization</h2>
-      <div class="heatmap-controls" id="heatmapTabs"></div>
+      <h2 id="heatmapTitle">Hourly Utilization</h2>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="heatmap-controls" id="heatmapTabs"></div>
+        <div class="view-toggle" id="viewToggle"></div>
+      </div>
+    </div>
+    <div id="staffingLegend" style="display:none">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot ld-add"></div><span id="lgAdd"></span></div>
+        <div class="legend-item"><div class="legend-dot ld-ok"></div><span id="lgOk"></span></div>
+        <div class="legend-item"><div class="legend-dot ld-cut"></div><span id="lgCut"></span></div>
+        <div class="legend-item"><div class="legend-dot ld-na"></div>No schedule</div>
+      </div>
     </div>
     <div class="heatmap-wrap" id="heatmapContainer"></div>
   </div>
@@ -465,10 +546,15 @@ const PERIODS    = DATA.META.periods; // [{label, start, end, isCurrent}, ...]
 
 const state = {
   blockTypes:        new Set(DATA.META.blockTypes),
-  heatmapIdx:        PERIODS.length - 1,  // default = current (W1)
+  heatmapIdx:        'avg2',  // default = 2-week average
+  viewMode:          'utilization',  // 'utilization' | 'staffing'
 };
 
+let ADD = 90;
+let CUT = 85;
+
 let allMetrics = [];  // one entry per period, index 0 = oldest
+let avg2Metrics = null; // 2-week aggregate (last 2 periods)
 let avgMetrics = null; // 4-week aggregate
 
 // ============================================================
@@ -510,6 +596,13 @@ function txtClr(pct) {
 function hourLabel(h) {
   const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
   return h12 + (h >= 12 ? 'PM' : 'AM');
+}
+
+function staffingAction(util) {
+  if (util === null) return 'none';
+  if (util > ADD) return 'add';
+  if (util < CUT) return 'cut';
+  return 'healthy';
 }
 
 // ============================================================
@@ -587,10 +680,14 @@ function computeMetrics(startDate, endDate) {
 // ============================================================
 function recalculate() {
   allMetrics = PERIODS.map(p => computeMetrics(p.start, p.end));
-  avgMetrics = computeMetrics(PERIODS[0].start, PERIODS[PERIODS.length - 1].end);
+  const n2 = PERIODS.length;
+  const avg2Start = PERIODS[n2 >= 2 ? n2 - 2 : 0].start;
+  avg2Metrics = computeMetrics(avg2Start, PERIODS[n2 - 1].end);
+  avgMetrics = computeMetrics(PERIODS[0].start, PERIODS[n2 - 1].end);
   renderScorecard();
   buildHeatmapTabs();
   renderHeatmap();
+  renderStaffingExtras();
   renderDailyTable();
   renderWeekendComparison();
 }
@@ -600,11 +697,14 @@ function recalculate() {
 // ============================================================
 function buildFilters() {
   const bc = document.getElementById('blockTypeFilters');
+  const offByDefault = ['shift adjustment', 'leaving early'];
   DATA.META.blockTypes.forEach(bt => {
+    const defaultOff = offByDefault.some(s => bt.toLowerCase().includes(s));
+    if (defaultOff) state.blockTypes.delete(bt);
     const lbl = document.createElement('label');
     lbl.className = 'filter-checkbox';
     const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = true;
+    cb.type = 'checkbox'; cb.checked = !defaultOff;
     cb.addEventListener('change', () => { cb.checked ? state.blockTypes.add(bt) : state.blockTypes.delete(bt); recalculate(); });
     const sp = document.createElement('span'); sp.textContent = bt;
     lbl.append(cb, sp); bc.appendChild(lbl);
@@ -628,6 +728,10 @@ function renderScorecard() {
     c = avgMetrics;
     p = null;
     wLabel = '4-Wk Avg';
+  } else if (state.heatmapIdx === 'avg2') {
+    c = avg2Metrics;
+    p = null;
+    wLabel = '2-Wk Avg';
   } else {
     c = allMetrics[state.heatmapIdx];
     p = state.heatmapIdx > 0 ? allMetrics[state.heatmapIdx - 1] : null;
@@ -656,6 +760,7 @@ function buildHeatmapTabs() {
   const wrap = document.getElementById('heatmapTabs');
   wrap.innerHTML = '';
   const labels = [...PERIODS.map((p, i) => ({ label: p.label, idx: i })),
+                  { label: '2-Wk Avg', idx: 'avg2' },
                   { label: '4-Wk Avg', idx: 'avg' }];
   labels.forEach(({ label, idx }, btnIdx) => {
     const btn = document.createElement('button');
@@ -669,6 +774,7 @@ function buildHeatmapTabs() {
       wrap.querySelectorAll('.hm-view-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderHeatmap();
+      renderStaffingExtras();
       renderScorecard();
       renderDailyTable();
       renderWeekendComparison();
@@ -681,15 +787,18 @@ function buildHeatmapTabs() {
 // HEATMAP
 // ============================================================
 function renderHeatmap() {
-  const m = state.heatmapIdx === 'avg' ? avgMetrics : allMetrics[state.heatmapIdx];
+  if (state.viewMode === 'staffing') { renderStaffingHeatmap(); return; }
+  renderUtilizationHeatmap();
+}
+
+function renderUtilizationHeatmap() {
+  const m = state.heatmapIdx === 'avg' ? avgMetrics : state.heatmapIdx === 'avg2' ? avg2Metrics : allMetrics[state.heatmapIdx];
   const dowDateCounts = m.dowDateCounts;
 
-  // Header: empty corner + day names as columns
   let html = '<table class="hm-table"><thead><tr><th></th>';
   for (let dow = 0; dow < 7; dow++) html += '<th>' + DAY_NAMES[dow] + '</th>';
   html += '</tr></thead><tbody>';
 
-  // Accumulators for per-day (column) averages
   const colSum = Array(7).fill(0);
   const colCnt = Array(7).fill(0);
   const colRawTher = Array(7).fill(0);
@@ -697,7 +806,6 @@ function renderHeatmap() {
   const colMemberAppt = Array(7).fill(0);
   const numHours = HOUR_END - HOUR_START;
 
-  // Body rows: one row per hour, one column per day-of-week
   for (let h = HOUR_START; h < HOUR_END; h++) {
     html += '<tr><td class="hour-label">' + hourLabel(h) + '</td>';
 
@@ -736,7 +844,6 @@ function renderHeatmap() {
     html += '</tr>';
   }
 
-  // Average row at bottom (per-day averages)
   html += '<tr class="avg-row"><td class="hour-label" style="font-weight:700">Avg</td>';
   for (let dow = 0; dow < 7; dow++) {
     const dDates = dowDateCounts[dow];
@@ -753,13 +860,91 @@ function renderHeatmap() {
 
   html += '</tbody></table>';
   document.getElementById('heatmapContainer').innerHTML = html;
+  wireTooltips();
+}
 
+function renderStaffingHeatmap() {
+  const m = state.heatmapIdx === 'avg' ? avgMetrics : state.heatmapIdx === 'avg2' ? avg2Metrics : allMetrics[state.heatmapIdx];
+  const dowDateCounts = m.dowDateCounts;
+
+  let html = '<table class="hm-staffing"><thead><tr><th></th>';
+  for (let dow = 0; dow < 7; dow++) html += '<th>' + DAY_NAMES[dow] + '</th>';
+  html += '</tr></thead><tbody>';
+
+  const colSum = Array(7).fill(0);
+  const colCnt = Array(7).fill(0);
+
+  for (let h = HOUR_START; h < HOUR_END; h++) {
+    html += '<tr><td class="hour-label">' + hourLabel(h) + '</td>';
+
+    for (let dow = 0; dow < 7; dow++) {
+      const dDates = dowDateCounts[dow];
+      const cc   = m.grid[dow][h];
+      const net  = cc.scheduled - cc.blocked;
+      const util = net > 0 ? (cc.appointment / net) * 100 : null;
+      const avgT = dDates > 0 ? cc.therapistCount / dDates : null;
+      const action = staffingAction(util);
+
+      const cellClass = action === 'add' ? 'cell-add' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
+      const val = util !== null ? '<span class="util-val">' + util.toFixed(0) + '%</span>' : '\u2013';
+      const badge = action === 'add' ? '<div class="badge badge-add">ADD</div>' :
+                    action === 'cut' ? '<div class="badge badge-cut">CUT</div>' : '';
+      const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' therapists</div>' : '';
+
+      if (util !== null) { colSum[dow] += util; colCnt[dow]++; }
+
+      const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + action.toUpperCase() +
+        '\nSched: ' + cc.scheduled.toFixed(1) + 'h  Block: ' + cc.blocked.toFixed(1) +
+        'h  Net: ' + net.toFixed(1) + 'h  Appt: ' + cc.appointment.toFixed(1) + 'h' +
+        (avgT !== null ? '\nTherapists: ' + avgT.toFixed(1) + ' on shift' : '') +
+        (util !== null && action === 'add' ? '\nGap: +' + (util - ADD).toFixed(1) + ' pp above ADD threshold' : '') +
+        (util !== null && action === 'cut' ? '\nGap: ' + (util - CUT).toFixed(1) + ' pp below CUT threshold' : '');
+
+      html += '<td class="' + cellClass + '" data-tip="' + escAttr(tip) + '">' +
+        val + badge + sub + '</td>';
+    }
+    html += '</tr>';
+  }
+
+  // Average row
+  html += '<tr class="avg-row"><td class="hour-label" style="font-weight:700">Avg</td>';
+  for (let dow = 0; dow < 7; dow++) {
+    const avgU = colCnt[dow] > 0 ? (colSum[dow] / colCnt[dow]).toFixed(0) + '%' : '\u2013';
+    const action = colCnt[dow] > 0 ? staffingAction(colSum[dow] / colCnt[dow]) : 'none';
+    const cellClass = action === 'add' ? 'cell-add' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
+    html += '<td class="row-total ' + cellClass + '"><span class="util-val">' + avgU + '</span></td>';
+  }
+  html += '</tr>';
+
+  html += '</tbody></table>';
+  document.getElementById('heatmapContainer').innerHTML = html;
+  wireTooltips();
+}
+
+function wireTooltips() {
   const tip = document.getElementById('tooltip');
   document.querySelectorAll('#heatmapContainer td[data-tip]').forEach(td => {
     td.addEventListener('mouseenter', e => { tip.textContent = td.dataset.tip; tip.style.display = 'block'; tip.style.left = e.pageX + 12 + 'px'; tip.style.top = e.pageY - 36 + 'px'; });
     td.addEventListener('mousemove',  e => { tip.style.left = e.pageX + 12 + 'px'; tip.style.top = e.pageY - 36 + 'px'; });
     td.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
   });
+}
+
+// ============================================================
+// STAFFING EXTRAS
+// ============================================================
+function renderStaffingExtras() {
+  const legendEl = document.getElementById('staffingLegend');
+
+  if (state.viewMode !== 'staffing') {
+    legendEl.style.display = 'none';
+    return;
+  }
+
+  legendEl.style.display = 'block';
+  document.getElementById('lgAdd').textContent = 'Add hours (>' + ADD + '%)';
+  document.getElementById('lgOk').textContent  = 'Healthy (' + CUT + '\u2013' + ADD + '%)';
+  document.getElementById('lgCut').textContent  = 'Cut hours (<' + CUT + '%)';
 }
 
 // ============================================================
@@ -775,10 +960,12 @@ function renderDailyTable() {
     const cls = i === selIdx ? ' class="num current-col"' : ' class="num"';
     html += '<th' + cls + '>' + p.label + '</th>';
   });
+  const avg2Cls = selIdx === 'avg2' ? ' class="num current-col"' : ' class="num"';
   const avgCls = selIdx === 'avg' ? ' class="num current-col"' : ' class="num"';
-  html += '<th' + avgCls + '>4-Wk Avg</th><th class="num">Trend</th></tr></thead><tbody>';
+  html += '<th' + avg2Cls + '>2-Wk Avg</th><th' + avgCls + '>4-Wk Avg</th><th class="num">Trend</th></tr></thead><tbody>';
 
   let totUtils = PERIODS.map(() => ({ a: 0, n: 0 }));
+  let totAvg2 = { a: 0, n: 0 };
   let totAvg = { a: 0, n: 0 };
 
   for (let dow = 0; dow < 7; dow++) {
@@ -793,6 +980,11 @@ function renderDailyTable() {
         totUtils[i].n += allMetrics[i].daily[dow].netAvailable;
       }
     });
+
+    // 2-Wk avg
+    const avg2U = avg2Metrics.daily[dow].utilization;
+    html += '<td' + avg2Cls + '>' + (avg2U !== null ? avg2U.toFixed(1) + '%' : 'N/A') + '</td>';
+    if (avg2U !== null) { totAvg2.a += avg2Metrics.daily[dow].appointment; totAvg2.n += avg2Metrics.daily[dow].netAvailable; }
 
     // 4-Wk avg
     const avgU = avgMetrics.daily[dow].utilization;
@@ -818,6 +1010,8 @@ function renderDailyTable() {
     const cls = i === selIdx ? ' class="num current-col"' : ' class="num"';
     html += '<td' + cls + '><strong>' + u + '</strong></td>';
   });
+  const avg2U = totAvg2.n > 0 ? (totAvg2.a / totAvg2.n * 100).toFixed(1) + '%' : 'N/A';
+  html += '<td' + avg2Cls + '><strong>' + avg2U + '</strong></td>';
   const avgU = totAvg.n > 0 ? (totAvg.a / totAvg.n * 100).toFixed(1) + '%' : 'N/A';
   html += '<td' + avgCls + '><strong>' + avgU + '</strong></td><td></td></tr>';
 
@@ -837,8 +1031,8 @@ function renderWeekendComparison() {
   }
 
   const wdDows = [0,1,2,3,4], weDows = [5,6];
-  const isAvg = state.heatmapIdx === 'avg';
-  const sel = isAvg ? avgMetrics : allMetrics[state.heatmapIdx];
+  const isAvg = state.heatmapIdx === 'avg' || state.heatmapIdx === 'avg2';
+  const sel = state.heatmapIdx === 'avg' ? avgMetrics : state.heatmapIdx === 'avg2' ? avg2Metrics : allMetrics[state.heatmapIdx];
   const cWd = agg(sel, wdDows), cWe = agg(sel, weDows);
   const aWd = agg(avgMetrics, wdDows), aWe = agg(avgMetrics, weDows);
 
@@ -846,7 +1040,7 @@ function renderWeekendComparison() {
     const u  = c.utilization  !== null ? c.utilization.toFixed(1)  + '%' : 'N/A';
     const deltaHtml = showDelta
       ? '<div class="util-delta">vs ' + refLabel + ': ' + fmtDelta(c.utilization, ref.utilization, '', true) + '</div>'
-      : '<div class="util-delta" style="color:#999">4-Wk Aggregate</div>';
+      : '<div class="util-delta" style="color:#999">' + (state.heatmapIdx === 'avg2' ? '2-Wk' : '4-Wk') + ' Aggregate</div>';
     return '<div class="comparison-card"><h3>' + title + '</h3>' +
       '<div class="big-util">' + u + '</div>' +
       deltaHtml +
@@ -865,6 +1059,45 @@ function renderWeekendComparison() {
 }
 
 // ============================================================
+// VIEW TOGGLE
+// ============================================================
+function buildViewToggle() {
+  const wrap = document.getElementById('viewToggle');
+  wrap.innerHTML = '';
+  ['utilization', 'staffing'].forEach(mode => {
+    const btn = document.createElement('button');
+    btn.className = 'view-btn' + (state.viewMode === mode ? ' active' : '');
+    btn.textContent = mode === 'utilization' ? 'Utilization' : 'Staffing';
+    btn.addEventListener('click', () => {
+      state.viewMode = mode;
+      wrap.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('heatmapTitle').textContent = mode === 'staffing' ? 'Staffing Recommendations' : 'Hourly Utilization';
+      renderHeatmap();
+      renderStaffingExtras();
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function buildThresholdInputs() {
+  const addEl = document.getElementById('addInput');
+  const cutEl = document.getElementById('cutInput');
+  function onThreshChange() {
+    let a = parseInt(addEl.value, 10);
+    let c = parseInt(cutEl.value, 10);
+    if (isNaN(a) || isNaN(c)) return;
+    // Enforce ADD > CUT
+    if (a <= c) { a = c + 1; addEl.value = a; }
+    ADD = a; CUT = c;
+    renderHeatmap();
+    renderStaffingExtras();
+  }
+  addEl.addEventListener('change', onThreshChange);
+  cutEl.addEventListener('change', onThreshChange);
+}
+
+// ============================================================
 // INIT
 // ============================================================
 const allStart = DATA.META.periods[0].start;
@@ -874,6 +1107,8 @@ document.getElementById('dateRangeText').innerHTML =
   ' &nbsp;|&nbsp; 4-week window: ' + allStart + ' \u2013 ' + allEnd;
 
 buildFilters();
+buildViewToggle();
+buildThresholdInputs();
 recalculate();
 </script>
 </body>
