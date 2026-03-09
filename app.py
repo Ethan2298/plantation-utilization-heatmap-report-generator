@@ -620,9 +620,6 @@ function computeMetrics(startDate, endDate) {
 
   const totalScheduledHrs = att.reduce((s, r) => s + r.scheduledHours, 0);
   const totalApptHrs      = appt.reduce((s, r) => s + r.durationMin / 60, 0);
-  const totalBlockHrs     = blk.reduce((s, r) => s + r.blockHours, 0);
-  const netAvailable      = totalScheduledHrs - totalBlockHrs;
-  const utilization       = netAvailable > 0 ? (totalApptHrs / netAvailable) * 100 : 0;
 
   const grid = {};
   for (let dow = 0; dow < 7; dow++) {
@@ -656,6 +653,14 @@ function computeMetrics(startDate, endDate) {
       if (r.isMember) grid[r.dayOfWeek][h].memberAppt += m;
     }
   });
+
+  // Derive block hours from grid (clipped to operating window) for consistency
+  let totalBlockHrs = 0;
+  for (let dow = 0; dow < 7; dow++)
+    for (let h = HOUR_START; h < HOUR_END; h++)
+      totalBlockHrs += grid[dow][h].blocked;
+  const netAvailable = totalScheduledHrs - totalBlockHrs;
+  const utilization  = netAvailable > 0 ? (totalApptHrs / netAvailable) * 100 : 0;
 
   const daily = {};
   for (let dow = 0; dow < 7; dow++) {
@@ -804,8 +809,8 @@ function renderUtilizationHeatmap() {
   for (let dow = 0; dow < 7; dow++) html += '<th>' + DAY_NAMES[dow] + '</th>';
   html += '</tr></thead><tbody>';
 
-  const colSum = Array(7).fill(0);
-  const colCnt = Array(7).fill(0);
+  const colNetHrs = Array(7).fill(0);
+  const colApptHrs = Array(7).fill(0);
   const colRawTher = Array(7).fill(0);
   const colAppt = Array(7).fill(0);
   const colMemberAppt = Array(7).fill(0);
@@ -830,7 +835,7 @@ function renderUtilizationHeatmap() {
       const bg  = utilColor(util);
       const fg  = txtClr(util);
 
-      if (util !== null) { colSum[dow] += util; colCnt[dow]++; }
+      if (util !== null) { colNetHrs[dow] += net; colApptHrs[dow] += cc.appointment; }
       colRawTher[dow] += cc.therapistCount;
       colAppt[dow] += cc.appointment; colMemberAppt[dow] += cc.memberAppt;
 
@@ -852,7 +857,7 @@ function renderUtilizationHeatmap() {
   html += '<tr class="avg-row"><td class="hour-label" style="font-weight:700">Avg</td>';
   for (let dow = 0; dow < 7; dow++) {
     const dDates = dowDateCounts[dow];
-    const avgU = colCnt[dow] > 0 ? (colSum[dow] / colCnt[dow]).toFixed(0) + '%' : '\u2013';
+    const avgU = colNetHrs[dow] > 0 ? (colApptHrs[dow] / colNetHrs[dow] * 100).toFixed(0) + '%' : '\u2013';
     const avgT = dDates > 0 ? (colRawTher[dow] / dDates / numHours).toFixed(1) + ' MT' : '';
     const mPct = DATA.META.hasMembership && colAppt[dow] > 0 ? Math.round(colMemberAppt[dow] / colAppt[dow] * 100) : null;
     const nmPct = mPct !== null ? 100 - mPct : null;
@@ -876,8 +881,8 @@ function renderStaffingHeatmap() {
   for (let dow = 0; dow < 7; dow++) html += '<th>' + DAY_NAMES[dow] + '</th>';
   html += '</tr></thead><tbody>';
 
-  const colSum = Array(7).fill(0);
-  const colCnt = Array(7).fill(0);
+  const colNetHrs = Array(7).fill(0);
+  const colApptHrs = Array(7).fill(0);
 
   for (let h = HOUR_START; h < HOUR_END; h++) {
     html += '<tr><td class="hour-label">' + hourLabel(h) + '</td>';
@@ -896,7 +901,7 @@ function renderStaffingHeatmap() {
                     action === 'cut' ? '<div class="cell-action cell-action-cut">Decrease</div>' : '';
       const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' MTs</div>' : '';
 
-      if (util !== null) { colSum[dow] += util; colCnt[dow]++; }
+      if (util !== null) { colNetHrs[dow] += net; colApptHrs[dow] += cc.appointment; }
 
       const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + ({add:'INCREASE',cut:'DECREASE',healthy:'HEALTHY',none:'NONE'}[action]||action.toUpperCase()) +
         '\nSched: ' + cc.scheduled.toFixed(1) + 'h  Block: ' + cc.blocked.toFixed(1) +
@@ -914,8 +919,9 @@ function renderStaffingHeatmap() {
   // Average row
   html += '<tr class="avg-row"><td class="hour-label" style="font-weight:700">Avg</td>';
   for (let dow = 0; dow < 7; dow++) {
-    const avgU = colCnt[dow] > 0 ? (colSum[dow] / colCnt[dow]).toFixed(0) + '%' : '\u2013';
-    const action = colCnt[dow] > 0 ? staffingAction(colSum[dow] / colCnt[dow]) : 'none';
+    const avgUtil = colNetHrs[dow] > 0 ? colApptHrs[dow] / colNetHrs[dow] * 100 : null;
+    const avgU = avgUtil !== null ? avgUtil.toFixed(0) + '%' : '\u2013';
+    const action = avgUtil !== null ? staffingAction(avgUtil) : 'none';
     const cellClass = action === 'add' ? 'cell-add' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
     html += '<td class="row-total ' + cellClass + '"><span class="util-val">' + avgU + '</span></td>';
   }
@@ -1166,7 +1172,13 @@ def compute_validation_summary(payload):
                    and not any(s in r.get('blockType', '').lower() for s in off_by_default)]
         sched  = sum(r['scheduledHours'] for r in p_att)
         appt_h = sum(r['durationMin'] / 60 for r in p_appt)
-        blk_h  = sum(r['blockHours'] for r in p_blk)
+        # Clip block hours to operating window (HOUR_START-HOUR_END) for consistency
+        op_start = HOUR_START * 60
+        op_end   = HOUR_END * 60
+        blk_h = 0
+        for r in p_blk:
+            clipped = max(0, min(r['endMinute'], op_end) - max(r['startMinute'], op_start))
+            blk_h += clipped / 60
         net    = sched - blk_h
         util   = appt_h / net * 100 if net > 0 else 0
         rows.append({
