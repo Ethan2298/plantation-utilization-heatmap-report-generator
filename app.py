@@ -422,10 +422,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .util-val{font-size:13px;font-weight:600}
 .cell-sub{font-size:10px;color:rgba(0,0,0,0.45);margin-top:1px}
 
-/* Staffing Badges */
-.badge{font-size:9px;font-weight:700;letter-spacing:0.5px;margin-top:3px;padding:1px 5px;border-radius:10px;display:inline-block}
-.badge-add{background:#86efac;color:#14532d}
-.badge-cut{background:#fca5a5;color:#7f1d1d}
+/* Staffing Action Labels */
+.cell-action{font-size:10px;font-weight:600;margin-top:2px;line-height:1.2}
+.cell-action-add{color:#15803d}
+.cell-action-cut{color:#b91c1c}
 
 /* Staffing Legend */
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;align-items:center}
@@ -487,13 +487,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
         <div class="filter-group-label">Thresholds</div>
         <div class="threshold-controls">
           <div class="ctrl-group">
-            <label>&#9650; Add above</label>
-            <input type="number" id="addInput" min="51" max="100" step="1" value="90" class="thresh-input add">
+            <label>&#9650; Increase above</label>
+            <input type="number" id="addInput" min="1" max="100" step="1" value="90" class="thresh-input add">
             <span class="thresh-pct">%</span>
           </div>
           <div class="ctrl-divider"></div>
           <div class="ctrl-group">
-            <label>&#9660; Cut below</label>
+            <label>&#9660; Decrease below</label>
             <input type="number" id="cutInput" min="0" max="99" step="1" value="85" class="thresh-input cut">
             <span class="thresh-pct">%</span>
           </div>
@@ -892,18 +892,18 @@ function renderStaffingHeatmap() {
 
       const cellClass = action === 'add' ? 'cell-add' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
       const val = util !== null ? '<span class="util-val">' + util.toFixed(0) + '%</span>' : '\u2013';
-      const badge = action === 'add' ? '<div class="badge badge-add">ADD</div>' :
-                    action === 'cut' ? '<div class="badge badge-cut">CUT</div>' : '';
+      const badge = action === 'add' ? '<div class="cell-action cell-action-add">Increase</div>' :
+                    action === 'cut' ? '<div class="cell-action cell-action-cut">Decrease</div>' : '';
       const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' therapists</div>' : '';
 
       if (util !== null) { colSum[dow] += util; colCnt[dow]++; }
 
-      const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + action.toUpperCase() +
+      const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + ({add:'INCREASE',cut:'DECREASE',healthy:'HEALTHY',none:'NONE'}[action]||action.toUpperCase()) +
         '\nSched: ' + cc.scheduled.toFixed(1) + 'h  Block: ' + cc.blocked.toFixed(1) +
         'h  Net: ' + net.toFixed(1) + 'h  Appt: ' + cc.appointment.toFixed(1) + 'h' +
         (avgT !== null ? '\nTherapists: ' + avgT.toFixed(1) + ' on shift' : '') +
-        (util !== null && action === 'add' ? '\nGap: +' + (util - ADD).toFixed(1) + ' pp above ADD threshold' : '') +
-        (util !== null && action === 'cut' ? '\nGap: ' + (util - CUT).toFixed(1) + ' pp below CUT threshold' : '');
+        (util !== null && action === 'add' ? '\nGap: +' + (util - ADD).toFixed(1) + ' pp above INCREASE threshold' : '') +
+        (util !== null && action === 'cut' ? '\nGap: ' + (util - CUT).toFixed(1) + ' pp below DECREASE threshold' : '');
 
       html += '<td class="' + cellClass + '" data-tip="' + escAttr(tip) + '">' +
         val + badge + sub + '</td>';
@@ -947,9 +947,9 @@ function renderStaffingExtras() {
   }
 
   legendEl.style.display = 'block';
-  document.getElementById('lgAdd').textContent = 'Add hours (>' + ADD + '%)';
+  document.getElementById('lgAdd').textContent = 'Increase hours (>' + ADD + '%)';
   document.getElementById('lgOk').textContent  = 'Healthy (' + CUT + '\u2013' + ADD + '%)';
-  document.getElementById('lgCut').textContent  = 'Cut hours (<' + CUT + '%)';
+  document.getElementById('lgCut').textContent  = 'Decrease hours (<' + CUT + '%)';
 }
 
 // ============================================================
@@ -1088,18 +1088,33 @@ function buildViewToggle() {
 function buildThresholdInputs() {
   const addEl = document.getElementById('addInput');
   const cutEl = document.getElementById('cutInput');
-  function onThreshChange() {
+  function applyThresholds() {
     let a = parseInt(addEl.value, 10);
     let c = parseInt(cutEl.value, 10);
     if (isNaN(a) || isNaN(c)) return;
-    // Enforce ADD > CUT
-    if (a <= c) { a = c + 1; addEl.value = a; }
+    a = Math.max(1, Math.min(100, a));
+    c = Math.max(0, Math.min(99, c));
+    if (a <= c) { a = c + 1; }
+    addEl.value = a; cutEl.value = c;
     ADD = a; CUT = c;
     renderHeatmap();
     renderStaffingExtras();
   }
-  addEl.addEventListener('change', onThreshChange);
-  cutEl.addEventListener('change', onThreshChange);
+  addEl.addEventListener('change', applyThresholds);
+  cutEl.addEventListener('change', applyThresholds);
+  addEl.addEventListener('input', function() {
+    // Remove min/max enforcement during typing so users can freely edit
+    addEl.removeAttribute('min'); addEl.removeAttribute('max');
+  });
+  cutEl.addEventListener('input', function() {
+    cutEl.removeAttribute('min'); cutEl.removeAttribute('max');
+  });
+  addEl.addEventListener('blur', function() {
+    addEl.min = 1; addEl.max = 100; applyThresholds();
+  });
+  cutEl.addEventListener('blur', function() {
+    cutEl.min = 0; cutEl.max = 99; applyThresholds();
+  });
 }
 
 // ============================================================
