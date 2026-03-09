@@ -547,7 +547,7 @@ const PERIODS    = DATA.META.periods; // [{label, start, end, isCurrent}, ...]
 
 const state = {
   blockTypes:        new Set(DATA.META.blockTypes),
-  heatmapIdx:        'avg2',  // default = 2-week average
+  heatmapIdx:        'avg',  // default = 4-week average
   viewMode:          'utilization',  // 'utilization' | 'staffing'
 };
 
