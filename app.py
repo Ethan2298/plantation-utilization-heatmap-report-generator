@@ -369,7 +369,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .heatmap-wrap{overflow-x:auto;border:1px solid #e5e5e5;border-radius:4px}
 .hm-table{border-collapse:separate;border-spacing:2px;width:100%;font-size:13px;background:#fff}
 .hm-table th{padding:8px 2px;text-align:center;font-weight:600;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.3px}
-.hm-table td{padding:6px 2px 5px;text-align:center;min-width:62px;border-radius:3px;font-weight:500;transition:opacity .15s}
+.hm-table td{padding:6px 2px 5px;text-align:center;min-width:110px;border-radius:3px;font-weight:500;transition:opacity .15s}
 .hm-cell-sub{font-size:10px;opacity:0.85;margin-top:1px;font-weight:400}
 .hm-table td:hover{opacity:0.85}
 .hm-table .hour-label{text-align:left;font-weight:600;color:#222;padding-left:10px;min-width:60px;background:transparent!important;font-size:13px}
@@ -414,7 +414,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 /* Staffing heatmap table overrides */
 .hm-staffing{border-collapse:separate;border-spacing:3px;width:100%;background:#fafafa;padding:6px;font-size:12px}
 .hm-staffing th{text-align:center;font-weight:600;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.4px;padding:4px}
-.hm-staffing td{border-radius:4px;min-width:100px;padding:6px 4px 5px;text-align:center;vertical-align:middle;cursor:default;transition:opacity .12s}
+.hm-staffing td{border-radius:4px;min-width:110px;padding:6px 4px 5px;text-align:center;vertical-align:middle;cursor:default;transition:opacity .12s}
 .hm-staffing td:hover{opacity:0.82}
 .hm-staffing .hour-label{text-align:right!important;padding-right:10px!important;font-weight:600;color:#555;min-width:48px;font-size:11px;background:transparent!important}
 .hm-staffing .row-total{font-weight:600;background:transparent!important;min-width:55px}
@@ -469,7 +469,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 
   <div class="header">
     <h1>__REPORT_TITLE__</h1>
-    <div class="subtitle">Therapist utilization by week, with trend</div>
+    <div class="subtitle">MT utilization by week, with trend</div>
     <div class="date-range" id="dateRangeText"></div>
   </div>
 
@@ -841,7 +841,7 @@ function renderUtilizationHeatmap() {
           ? '\nMember: ' + cc.memberAppt.toFixed(1) + 'h (' + Math.round(memberShare) + '%)' +
             '  Non-member: ' + (cc.appointment - cc.memberAppt).toFixed(1) + 'h (' + Math.round(nmShare) + '%)'
           : '') +
-        (avgT !== null ? '\nTherapists: ' + avgT.toFixed(1) + ' on shift' : '');
+        (avgT !== null ? '\nMTs: ' + avgT.toFixed(1) + ' on shift' : '');
 
       html += '<td style="background:' + bg + ';color:' + fg + '" data-tip="' + escAttr(tip) + '">' +
         '<div>' + val + '</div>' + (sub ? '<div class="hm-cell-sub">' + sub + '</div>' : '') + '</td>';
@@ -894,14 +894,14 @@ function renderStaffingHeatmap() {
       const val = util !== null ? '<span class="util-val">' + util.toFixed(0) + '%</span>' : '\u2013';
       const badge = action === 'add' ? '<div class="cell-action cell-action-add">Increase</div>' :
                     action === 'cut' ? '<div class="cell-action cell-action-cut">Decrease</div>' : '';
-      const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' therapists</div>' : '';
+      const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' MTs</div>' : '';
 
       if (util !== null) { colSum[dow] += util; colCnt[dow]++; }
 
       const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + ({add:'INCREASE',cut:'DECREASE',healthy:'HEALTHY',none:'NONE'}[action]||action.toUpperCase()) +
         '\nSched: ' + cc.scheduled.toFixed(1) + 'h  Block: ' + cc.blocked.toFixed(1) +
         'h  Net: ' + net.toFixed(1) + 'h  Appt: ' + cc.appointment.toFixed(1) + 'h' +
-        (avgT !== null ? '\nTherapists: ' + avgT.toFixed(1) + ' on shift' : '') +
+        (avgT !== null ? '\nMTs: ' + avgT.toFixed(1) + ' on shift' : '') +
         (util !== null && action === 'add' ? '\nGap: +' + (util - ADD).toFixed(1) + ' pp above INCREASE threshold' : '') +
         (util !== null && action === 'cut' ? '\nGap: ' + (util - CUT).toFixed(1) + ' pp below DECREASE threshold' : '');
 
