@@ -1231,6 +1231,25 @@ if st.button("Generate Report", type="primary", disabled=not required_ready):
         with st.spinner("Loading block out time..."):
             bot_df = load_blockouts(bot_file)
 
+        # --- Location cross-validation ---
+        # Compare the dominant (most-frequent) location per file.
+        # Minor spillover from other locations is normal and ignored.
+        dominant = {}
+        if 'Work Center' in att_df.columns:
+            dominant['Attendance'] = att_df['Work Center'].dropna().value_counts().idxmax()
+        if 'Center Name' in appt_df.columns:
+            dominant['Appointments'] = appt_df['Center Name'].dropna().value_counts().idxmax()
+        if 'Work Center' in bot_df.columns and not bot_df['Work Center'].dropna().empty:
+            dominant['Block Out Time'] = bot_df['Work Center'].dropna().value_counts().idxmax()
+
+        if len(set(dominant.values())) > 1:
+            lines = [f"- {src}: **{loc}**" for src, loc in dominant.items()]
+            st.warning(
+                f"### ⚠️ Files are from different locations!\n\n"
+                + "\n".join(lines)
+                + "\n\nThis will skew utilization. Make sure all files are from the same center."
+            )
+
         with st.spinner("Tagging members..."):
             if mem_file is not None:
                 lookup = load_membership(mem_file)
