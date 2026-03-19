@@ -409,6 +409,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .cell-cut{background:#fee2e2;color:#b91c1c}
 .cell-cut .cell-sub{color:rgba(185,28,28,0.55)}
 .cell-ok{color:#555}
+.cell-capped{background:#fef3c7;color:#92400e}
+.cell-capped .cell-sub{color:rgba(146,64,14,0.55)}
 .cell-empty{background:#f3f4f6;color:#ccc;font-size:11px}
 
 /* Staffing heatmap table overrides */
@@ -426,6 +428,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .cell-action{font-size:10px;font-weight:600;margin-top:2px;line-height:1.2}
 .cell-action-add{color:#15803d}
 .cell-action-cut{color:#b91c1c}
+.cell-action-capped{color:#92400e}
 
 /* Staffing Legend */
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;align-items:center}
@@ -434,6 +437,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .ld-add{background:#dcfce7;border:1px solid #86efac}
 .ld-ok{background:#f3f4f6;border:1px solid #d1d5db}
 .ld-cut{background:#fee2e2;border:1px solid #fca5a5}
+.ld-capped{background:#fef3c7;border:1px solid #fcd34d}
 .ld-na{background:#f3f4f6;border:1px solid #d1d5db}
 
 /* Threshold Controls */
@@ -516,6 +520,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
     <div id="staffingLegend" style="display:none">
       <div class="legend">
         <div class="legend-item"><div class="legend-dot ld-add"></div><span id="lgAdd"></span></div>
+        <div class="legend-item"><div class="legend-dot ld-capped"></div>At Capacity (&#8805; 11 rooms)</div>
         <div class="legend-item"><div class="legend-dot ld-ok"></div><span id="lgOk"></span></div>
         <div class="legend-item"><div class="legend-dot ld-cut"></div><span id="lgCut"></span></div>
         <div class="legend-item"><div class="legend-dot ld-na"></div>No schedule</div>
@@ -553,6 +558,7 @@ const state = {
 
 let ADD = 90;
 let CUT = 85;
+const MAX_ROOMS = 11;
 
 let allMetrics = [];  // one entry per period, index 0 = oldest
 let avg2Metrics = null; // 2-week aggregate (last 2 periods)
@@ -893,20 +899,25 @@ function renderStaffingHeatmap() {
       const net  = cc.scheduled - cc.blocked;
       const util = net > 0 ? (cc.appointment / net) * 100 : null;
       const avgT = dDates > 0 ? cc.therapistCount / dDates : null;
-      const action = staffingAction(util);
+      let action = staffingAction(util);
+      const capped = action === 'add' && avgT !== null && Math.ceil(avgT) >= MAX_ROOMS;
+      if (capped) action = 'capped';
 
-      const cellClass = action === 'add' ? 'cell-add' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
+      const cellClass = action === 'add' ? 'cell-add' : action === 'capped' ? 'cell-capped' : action === 'cut' ? 'cell-cut' : action === 'healthy' ? 'cell-ok' : 'cell-empty';
       const val = util !== null ? '<span class="util-val">' + util.toFixed(0) + '%</span>' : '\u2013';
       const badge = action === 'add' ? '<div class="cell-action cell-action-add">Increase</div>' :
+                    action === 'capped' ? '<div class="cell-action cell-action-capped">At Capacity</div>' :
                     action === 'cut' ? '<div class="cell-action cell-action-cut">Decrease</div>' : '';
       const sub = avgT !== null ? '<div class="cell-sub">' + avgT.toFixed(1) + ' MTs</div>' : '';
 
       if (util !== null) { colNetHrs[dow] += net; colApptHrs[dow] += cc.appointment; }
 
-      const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + ({add:'INCREASE',cut:'DECREASE',healthy:'HEALTHY',none:'NONE'}[action]||action.toUpperCase()) +
+      const actionLabel = {add:'INCREASE',capped:'AT CAPACITY',cut:'DECREASE',healthy:'HEALTHY',none:'NONE'}[action]||action.toUpperCase();
+      const tip = 'Util: ' + (util !== null ? util.toFixed(0) + '%' : 'N/A') + '  Action: ' + actionLabel +
         '\nSched: ' + cc.scheduled.toFixed(1) + 'h  Block: ' + cc.blocked.toFixed(1) +
         'h  Net: ' + net.toFixed(1) + 'h  Appt: ' + cc.appointment.toFixed(1) + 'h' +
         (avgT !== null ? '\nMTs: ' + avgT.toFixed(1) + ' on shift' : '') +
+        (capped ? '\nAll ' + MAX_ROOMS + ' rooms in use \u2014 cannot add more MTs' : '') +
         (util !== null && action === 'add' ? '\nGap: +' + (util - ADD).toFixed(1) + ' pp above INCREASE threshold' : '') +
         (util !== null && action === 'cut' ? '\nGap: ' + (util - CUT).toFixed(1) + ' pp below DECREASE threshold' : '');
 
