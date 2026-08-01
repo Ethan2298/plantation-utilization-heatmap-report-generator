@@ -66,11 +66,70 @@ After generating a report, validate it against the source data:
 # Quick sanity check (~2 seconds)
 python scripts/quick_check.py <html_report> <attendance> <appointments> <blockout>
 
-# Exhaustive adversarial validation (17 test sections)
+# Exhaustive adversarial validation
 python scripts/validate_report.py <html_report> <attendance> <appointments> <blockout>
 ```
 
-Both scripts independently reload and re-parse the source files, then compare against the embedded JSON in the HTML report. They check record counts, field-level accuracy, dayOfWeek correctness, utilization recalculation, period boundaries, and more.
+Both scripts now use a shared validation core with:
+
+- mirror parsing (matches app.py behavior) and independent reference parsing
+- reason-coded row-loss ledgers per source
+- critical-vs-warning severity policy (critical failures control exit code)
+- machine-readable JSON output for automation
+
+### Optional Validation Flags
+
+```bash
+# Include membership end-to-end checks
+--membership <membership_file>
+
+# Emit machine-readable report
+--json-out <output.json>
+
+# Summary-only terminal output
+--quiet
+```
+
+Examples:
+
+```bash
+python scripts/quick_check.py report.html attendance.csv appointments.csv blockout.csv \
+  --json-out quick_report.json
+
+python scripts/validate_report.py report.html attendance.csv appointments.csv blockout.csv \
+  --membership membership.csv --json-out validate_report.json
+```
+
+### Severity and Exit Policy
+
+- **Critical failures**: correctness/integrity violations (for example parse drift, hidden block types, membership mismatch)
+- **Warnings**: suspicious but potentially expected conditions (for example zero-duration appointment filtering, duplicates, coverage gaps)
+- **Info/pass**: successful invariants and metadata checks
+
+Exit code policy:
+
+- `0` when no critical failures
+- `1` when one or more critical failures
+
+### Triage Guide
+
+When a critical check fails:
+
+1. Review the row-loss ledger first (`schedule_parse_fail`, `datetime_parse_fail`, `time_parse_fail`).
+2. If membership checks fail, verify guest-code normalization and membership date boundaries.
+3. For invariant failures, compare `scorecard_util` vs `grid_util` in the period metrics section.
+4. Use `--json-out` and inspect `checks[].id` plus `checks[].details` for exact mismatches.
+
+### Local Test Suite
+
+Install test dependencies and run:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The tests are synthetic-only and include deterministic scenarios plus Hypothesis property tests for interval math, row-loss accounting, and period-boundary detection.
 
 ## Constants
 
